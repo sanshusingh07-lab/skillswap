@@ -1,0 +1,19 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment
+.env
+
+# Local database (SQLite)
+skillswap.db
+
+# Uploads
+static/uploads/*
+!static/uploads/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db

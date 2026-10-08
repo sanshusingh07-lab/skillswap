@@ -1,0 +1,381 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="dashboard">
+<div class="wrap">
+
+  <!-- ======== PROFILE HEADER ======== -->
+  <div class="profile-header">
+    <div class="profile-header-left">
+      <div class="large-avatar profile-avatar">{{ profile_user.name[:1] }}{{ profile_user.name.split()[-1][:1] }}</div>
+      <div>
+        <div class="eyebrow">{{ 'Your profile' if own_profile else 'Skill partner' }}</div>
+        <h1 class="profile-name">{{ profile_user.name }}</h1>
+        <p class="profile-meta">
+          <i class="bi bi-mortarboard"></i> {{ profile_user.department }}
+          <span class="meta-sep">·</span>
+          <i class="bi bi-building"></i> {{ profile_user.college }}
+          {% if profile_user.year %}
+            <span class="meta-sep">·</span>
+            <i class="bi bi-calendar3"></i> {{ profile_user.year }}
+          {% endif %}
+        </p>
+        <p class="profile-bio">{{ profile_user.bio or 'Still finding the right words, but always curious to learn with other students.' }}</p>
+      </div>
+    </div>
+    <div class="profile-header-actions">
+      {% if own_profile %}
+        <a class="button button-primary" href="{{ url_for('edit_profile') }}"><i class="bi bi-pencil"></i> Edit profile</a>
+        <a class="button button-outline" href="{{ url_for('skills') }}"><i class="bi bi-lightbulb"></i> Manage skills</a>
+      {% else %}
+        <form method="post" action="{{ url_for('send_request', user_id=profile_user.id) }}">{{ csrf_token() }}<button class="button button-primary"><i class="bi bi-person-plus"></i> Send request</button></form>
+        <a class="button button-outline" href="{{ url_for('chat', user_id=profile_user.id) }}"><i class="bi bi-chat-dots"></i> Message</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if own_profile %}
+  <!-- ======== QUICK STATS ======== -->
+  <div class="stats profile-stats">
+    <div class="stat">
+      <span class="stat-label">Skills I teach <i class="bi bi-lightbulb"></i></span>
+      <strong>{{ teach_count }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Skills I want <i class="bi bi-bookmark"></i></span>
+      <strong>{{ learn_count }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Connections <i class="bi bi-people"></i></span>
+      <strong>{{ connection_count }}</strong>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Avg. rating <i class="bi bi-star"></i></span>
+      <strong>{{ avg_rating if avg_rating else '—' }}</strong>
+    </div>
+  </div>
+
+  <!-- ======== TAB NAVIGATION ======== -->
+  <div class="profile-tabs" id="profileTabs">
+    <button class="profile-tab active" data-tab="skills"><i class="bi bi-lightbulb"></i> Skills</button>
+    <button class="profile-tab" data-tab="requests"><i class="bi bi-send"></i> Requests
+      {% if incoming_requests %}<span class="tab-badge">{{ incoming_requests|length }}</span>{% endif %}
+    </button>
+    <button class="profile-tab" data-tab="connections"><i class="bi bi-people"></i> Connections</button>
+    <button class="profile-tab" data-tab="messages"><i class="bi bi-chat-dots"></i> Messages
+      {% set total_unread = chat_partners|selectattr('unread')|list|length %}
+    </button>
+    <button class="profile-tab" data-tab="feedback"><i class="bi bi-star"></i> Feedback</button>
+    <button class="profile-tab" data-tab="notifications"><i class="bi bi-bell"></i> Notifications
+      {% if unread_notifs %}<span class="tab-badge">{{ unread_notifs }}</span>{% endif %}
+    </button>
+  </div>
+
+  <!-- ======== TAB: SKILLS ======== -->
+  <div class="profile-tab-panel active" id="tab-skills">
+    <div class="profile-section-grid">
+      <!-- Teach -->
+      <div class="feature-panel">
+        <div class="panel-header">
+          <h3><i class="bi bi-lightbulb"></i> Skills I can teach</h3>
+          <a href="{{ url_for('skills') }}" class="text-link">Add more <i class="bi bi-plus-circle"></i></a>
+        </div>
+        {% for item in profile_user.skills_by_type('teach') %}
+          <div class="skill-row">
+            <div>
+              <strong>{{ item.skill.skill_name }}</strong>
+              <small>{{ item.skill.category }} · {{ item.level }}</small>
+            </div>
+          </div>
+        {% else %}
+          <div class="empty-mini"><i class="bi bi-lightbulb"></i> No teaching skills yet. <a href="{{ url_for('skills') }}" class="text-link">Add skills</a></div>
+        {% endfor %}
+      </div>
+      <!-- Learn -->
+      <div class="feature-panel">
+        <div class="panel-header">
+          <h3><i class="bi bi-bookmark"></i> Skills I want to learn</h3>
+          <a href="{{ url_for('skills') }}" class="text-link">Add more <i class="bi bi-plus-circle"></i></a>
+        </div>
+        {% for item in profile_user.skills_by_type('learn') %}
+          <div class="skill-row">
+            <div>
+              <strong>{{ item.skill.skill_name }}</strong>
+              <small>{{ item.skill.category }} · {{ item.level }}</small>
+            </div>
+          </div>
+        {% else %}
+          <div class="empty-mini"><i class="bi bi-bookmark"></i> No learning goals yet. <a href="{{ url_for('skills') }}" class="text-link">Add goals</a></div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== TAB: REQUESTS ======== -->
+  <div class="profile-tab-panel" id="tab-requests">
+    <!-- Incoming -->
+    <div class="panel-header">
+      <h3><i class="bi bi-inbox"></i> Incoming requests</h3>
+      <a href="{{ url_for('requests_page') }}" class="text-link">View all <i class="bi bi-arrow-right"></i></a>
+    </div>
+    <div class="stack-list">
+      {% for conn in incoming_requests %}
+        <article class="feature-panel request-row">
+          <div class="profile-top">
+            <span class="avatar teal">{{ conn.sender.name[:1] }}{{ conn.sender.name.split()[-1][:1] }}</span>
+            <div>
+              <h3><a href="{{ url_for('partner_profile', user_id=conn.sender.id) }}">{{ conn.sender.name }}</a></h3>
+              <p>{{ conn.sender.department }} · wants to learn with you</p>
+            </div>
+          </div>
+          <div class="button-row">
+            <form method="post" action="{{ url_for('request_action', connection_id=conn.id, action='accept') }}">{{ csrf_token() }}<button class="button button-primary button-small">Accept</button></form>
+            <form method="post" action="{{ url_for('request_action', connection_id=conn.id, action='reject') }}">{{ csrf_token() }}<button class="button button-outline button-small">Reject</button></form>
+          </div>
+        </article>
+      {% else %}
+        <div class="empty-mini"><i class="bi bi-inbox"></i> No incoming requests right now.</div>
+      {% endfor %}
+    </div>
+
+    <!-- Outgoing -->
+    <div class="panel-header" style="margin-top:32px">
+      <h3><i class="bi bi-send"></i> Sent requests</h3>
+    </div>
+    <div class="stack-list">
+      {% for conn in outgoing_requests %}
+        <article class="feature-panel request-row">
+          <div class="profile-top">
+            <span class="avatar gold">{{ conn.receiver.name[:1] }}{{ conn.receiver.name.split()[-1][:1] }}</span>
+            <div>
+              <h3><a href="{{ url_for('partner_profile', user_id=conn.receiver.id) }}">{{ conn.receiver.name }}</a></h3>
+              <p>{{ conn.receiver.department }} · pending</p>
+            </div>
+          </div>
+          <div class="button-row">
+            <form method="post" action="{{ url_for('cancel_request', connection_id=conn.id) }}">{{ csrf_token() }}<button class="button button-outline button-small"><i class="bi bi-x-lg"></i> Cancel</button></form>
+          </div>
+        </article>
+      {% else %}
+        <div class="empty-mini"><i class="bi bi-send"></i> No pending sent requests.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ======== TAB: CONNECTIONS ======== -->
+  <div class="profile-tab-panel" id="tab-connections">
+    <div class="panel-header">
+      <h3><i class="bi bi-people"></i> Active connections</h3>
+      <a href="{{ url_for('connections') }}" class="text-link">View all <i class="bi bi-arrow-right"></i></a>
+    </div>
+    <div class="partner-grid profile-partner-grid">
+      {% for conn in accepted_connections %}
+        {% set partner = conn.receiver if conn.sender_id == profile_user.id else conn.sender %}
+        <article class="profile-card">
+          <div class="profile-top">
+            <span class="avatar {{ loop.cycle('', 'teal', 'gold') }}">{{ partner.name[:1] }}{{ partner.name.split()[-1][:1] }}</span>
+            <div>
+              <h3>{{ partner.name }}</h3>
+              <p>{{ partner.department }}</p>
+            </div>
+          </div>
+          <div class="skill-group">
+            <label>Teaches</label>
+            {% for item in partner.skills_by_type('teach')[:3] %}
+              <span class="skill-pill">{{ item.skill.skill_name }}</span>
+            {% endfor %}
+          </div>
+          <div class="conn-actions">
+            <a class="button button-outline button-small" href="{{ url_for('partner_profile', user_id=partner.id) }}"><i class="bi bi-person"></i> Profile</a>
+            <a class="button button-primary button-small" href="{{ url_for('chat', user_id=partner.id) }}"><i class="bi bi-chat-dots"></i> Chat</a>
+          </div>
+        </article>
+      {% else %}
+        <div class="empty-state">
+          <i class="bi bi-people"></i>
+          <h2>No connections yet</h2>
+          <p>Find skill partners and send them a request to connect.</p>
+          <a href="{{ url_for('find_partners') }}" class="button button-primary" style="margin-top:12px"><i class="bi bi-search"></i> Find partners</a>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ======== TAB: MESSAGES ======== -->
+  <div class="profile-tab-panel" id="tab-messages">
+    <div class="panel-header">
+      <h3><i class="bi bi-chat-dots"></i> Recent conversations</h3>
+      <a href="{{ url_for('messages') }}" class="text-link">All messages <i class="bi bi-arrow-right"></i></a>
+    </div>
+    <div class="stack-list">
+      {% for chat in chat_partners %}
+        <a href="{{ url_for('chat', user_id=chat.user.id) }}" class="conversation">
+          <span class="avatar {{ 'teal' if chat.unread else '' }}">{{ chat.user.name[:1] }}{{ chat.user.name.split()[-1][:1] }}</span>
+          <span>
+            <strong>{{ chat.user.name }}{% if chat.unread %} <span class="unread-dot"></span>{% endif %}</strong>
+            <small>{{ chat.last_message.message[:60] }}{% if chat.last_message.message|length > 60 %}…{% endif %}</small>
+          </span>
+          {% if chat.unread %}
+            <span class="unread-badge">{{ chat.unread }}</span>
+          {% endif %}
+        </a>
+      {% else %}
+        <div class="empty-mini"><i class="bi bi-chat-dots"></i> No messages yet. Start a conversation with a connected partner.</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ======== TAB: FEEDBACK ======== -->
+  <div class="profile-tab-panel" id="tab-feedback">
+    <div class="panel-header">
+      <h3><i class="bi bi-star"></i> Feedback received</h3>
+      {% if avg_rating %}
+        <span class="avg-rating"><i class="bi bi-star-fill"></i> {{ avg_rating }} / 5 average</span>
+      {% endif %}
+    </div>
+    <div class="stack-list">
+      {% for fb in feedback_received %}
+        <article class="feature-panel feedback-card">
+          <div class="feedback-header">
+            <div class="star-row">
+              {% for i in range(5) %}
+                <i class="bi {{ 'bi-star-fill' if i < fb.rating else 'bi-star' }}"></i>
+              {% endfor %}
+            </div>
+            <small class="muted">{{ fb.created_at.strftime('%b %d, %Y') }}</small>
+          </div>
+          {% if fb.comment %}
+            <p class="feedback-comment">"{{ fb.comment }}"</p>
+          {% endif %}
+          <small class="muted">From a skill exchange partner</small>
+        </article>
+      {% else %}
+        <div class="empty-mini"><i class="bi bi-star"></i> No feedback received yet. Complete a skill exchange to get your first review.</div>
+      {% endfor %}
+    </div>
+    {% if accepted_connections %}
+      <a href="{{ url_for('feedback') }}" class="button button-outline" style="margin-top:18px"><i class="bi bi-pencil-square"></i> Leave feedback</a>
+    {% endif %}
+  </div>
+
+  <!-- ======== TAB: NOTIFICATIONS ======== -->
+  <div class="profile-tab-panel" id="tab-notifications">
+    <div class="panel-header">
+      <h3><i class="bi bi-bell"></i> Notifications</h3>
+      {% if unread_notifs %}
+        <form method="post" action="{{ url_for('mark_notifications_read') }}">{{ csrf_token() }}<button class="button button-outline button-small"><i class="bi bi-check-all"></i> Mark all read</button></form>
+      {% endif %}
+    </div>
+    <div class="stack-list">
+      {% for notif in notifications %}
+        <div class="notification-row {{ 'notif-unread' if not notif.is_read }}">
+          <div class="notif-icon">
+            {% if notif.type == 'request' %}<i class="bi bi-person-plus"></i>
+            {% elif notif.type == 'accepted' %}<i class="bi bi-check-circle"></i>
+            {% elif notif.type == 'message' %}<i class="bi bi-chat-dots"></i>
+            {% elif notif.type == 'feedback' %}<i class="bi bi-star"></i>
+            {% else %}<i class="bi bi-bell"></i>{% endif %}
+          </div>
+          <div class="notif-body">
+            <p>{{ notif.message }}</p>
+            <small class="muted">{{ notif.created_at.strftime('%b %d, %Y at %I:%M %p') }}</small>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty-mini"><i class="bi bi-bell"></i> No notifications. You're all caught up!</div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ======== QUICK ACTIONS ======== -->
+  <div class="quick-actions">
+    <div class="eyebrow">Quick actions</div>
+    <div class="quick-grid">
+      <a href="{{ url_for('find_partners') }}" class="quick-card">
+        <i class="bi bi-search"></i>
+        <strong>Find partners</strong>
+        <small>Browse skill-matched students</small>
+      </a>
+      <a href="{{ url_for('skills') }}" class="quick-card">
+        <i class="bi bi-plus-circle"></i>
+        <strong>Add skills</strong>
+        <small>Update your teach & learn list</small>
+      </a>
+      <a href="{{ url_for('edit_profile') }}" class="quick-card">
+        <i class="bi bi-pencil-square"></i>
+        <strong>Edit profile</strong>
+        <small>Change name, bio, college info</small>
+      </a>
+      <a href="{{ url_for('settings') }}" class="quick-card">
+        <i class="bi bi-gear"></i>
+        <strong>Settings</strong>
+        <small>Preferences & privacy</small>
+      </a>
+    </div>
+  </div>
+
+  {% else %}
+  <!-- ======== VIEWING SOMEONE ELSE'S PROFILE ======== -->
+  {% if match %}
+    <div class="alert match-banner">
+      <strong>{{ match.label }} · {{ match.score }}%</strong>
+      {% for reason in match.reasons %}
+        <br>{{ reason }}
+      {% endfor %}
+    </div>
+  {% endif %}
+  <div class="profile-section-grid">
+    <div class="feature-panel">
+      <h3><i class="bi bi-lightbulb"></i> Skills they teach</h3>
+      {% for item in profile_user.skills_by_type('teach') %}
+        <span class="skill-pill">{{ item.skill.skill_name }} · {{ item.level }}</span>
+      {% else %}
+        <span class="muted">No teaching skills added yet.</span>
+      {% endfor %}
+    </div>
+    <div class="feature-panel">
+      <h3><i class="bi bi-bookmark"></i> Skills they want to learn</h3>
+      {% for item in profile_user.skills_by_type('learn') %}
+        <span class="skill-pill skill-teal">{{ item.skill.skill_name }} · {{ item.level }}</span>
+      {% else %}
+        <span class="muted">No learning goals added yet.</span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+</section>
+
+<!-- Profile tab switching -->
+<script>
+(function() {
+  const tabs = document.querySelectorAll('.profile-tab');
+  const panels = document.querySelectorAll('.profile-tab-panel');
+  if (!tabs.length) return;
+
+  // Check URL hash for initial tab
+  const hash = window.location.hash.replace('#', '');
+  if (hash) {
+    const target = document.getElementById('tab-' + hash);
+    if (target) {
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      target.classList.add('active');
+      const btn = document.querySelector('[data-tab="' + hash + '"]');
+      if (btn) btn.classList.add('active');
+    }
+  }
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+      const name = this.dataset.tab;
+      tabs.forEach(t => t.classList.remove('active'));
+      panels.forEach(p => p.classList.remove('active'));
+      this.classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+      history.replaceState(null, '', '#' + name);
+    });
+  });
+})();
+</script>
+{% endblock %}
